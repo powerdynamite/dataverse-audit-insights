@@ -1,0 +1,91 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.10.0/schema.json",
+  "name": "p2v05",
+  "position": {
+    "x": 640,
+    "y": 204,
+    "z": 0,
+    "height": 246,
+    "width": 640,
+    "tabOrder": 4000
+  },
+  "visual": {
+    "visualType": "matrix",
+    "query": {
+      "queryState": {
+        "Rows": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Dim_Table"
+                    }
+                  },
+                  "Property": "TableDisplayName"
+                }
+              },
+              "queryRef": "Dim_Table.TableDisplayName"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Fact_FieldChange"
+                    }
+                  },
+                  "Property": "FieldName"
+                }
+              },
+              "queryRef": "Fact_FieldChange.FieldName"
+            }
+          ]
+        },
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "_Measures"
+                    }
+                  },
+                  "Property": "Field Changes"
+                }
+              },
+              "queryRef": "_Measures.Field Changes"
+            }
+          ]
+        }
+      }
+    },
+            "visualContainerObjects": {
+      "background": [
+        {
+          "properties": {
+            "show": { "expr": { "Literal": { "Value": "true" } } },
+            "color": {
+              "solid": {
+                "color": {
+                  "expr": { "Literal": { "Value": "'#FFFFFF'" } }
+                }
+              }
+            },
+            "transparency": { "expr": { "Literal": { "Value": "0" } } }
+          }
+        }
+      ],
+      "border": [
+        {
+          "properties": {
+            "show": { "expr": { "Literal": { "Value": "false" } } }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

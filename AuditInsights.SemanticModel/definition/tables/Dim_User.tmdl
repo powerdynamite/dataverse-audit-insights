@@ -1,0 +1,39 @@
+table Dim_User
+	lineageTag: 3f78b214-aad4-4d1d-8417-629d9187a96d
+
+	column UserId
+		dataType: string
+		isKey
+		lineageTag: 5eef4714-8c7a-453a-93a9-33a2ba537c6b
+		summarizeBy: none
+		sourceColumn: UserId
+
+	column UserName
+		dataType: string
+		lineageTag: 9ca96269-ac56-4102-9079-430cc90098ec
+		summarizeBy: none
+		sourceColumn: UserName
+
+	column UserPrincipalName
+		dataType: string
+		lineageTag: e6b76200-5597-41f8-9381-49b2c1dd62b0
+		summarizeBy: none
+		sourceColumn: UserPrincipalName
+
+	column IsDisabled
+		dataType: boolean
+		lineageTag: 74be052c-b5a3-416b-be5b-fe1b2dd9a945
+		summarizeBy: none
+		sourceColumn: IsDisabled
+
+	partition Dim_User = m
+		mode: import
+		source =
+				let
+				    Source = OData.Feed(DataverseEnvironmentUrl & "/api/data/v9.2/systemusers?$select=systemuserid,fullname,domainname,isdisabled", null, [Implementation="2.0", ODataVersion=4]),
+				    Selected = Table.SelectColumns(Source, {"systemuserid","fullname","domainname","isdisabled"}, MissingField.UseNull),
+				    Renamed = Table.RenameColumns(Selected, {{"systemuserid","UserId"},{"fullname","UserName"},{"domainname","UserPrincipalName"},{"isdisabled","IsDisabled"}}),
+				    Typed = Table.TransformColumnTypes(Renamed, {{"UserId", type text},{"UserName", type text},{"UserPrincipalName", type text},{"IsDisabled", type logical}})
+				in
+				    Typed
+

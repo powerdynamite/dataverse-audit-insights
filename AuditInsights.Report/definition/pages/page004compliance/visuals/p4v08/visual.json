@@ -1,0 +1,113 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.10.0/schema.json",
+  "name": "p4v08",
+  "position": {
+    "x": 0,
+    "y": 430,
+    "z": 0,
+    "height": 280,
+    "width": 1280,
+    "tabOrder": 7000
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Dim_Table"
+                    }
+                  },
+                  "Property": "TableDisplayName"
+                }
+              },
+              "queryRef": "Dim_Table.TableDisplayName"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Fact_Audit"
+                    }
+                  },
+                  "Property": "ObjectId"
+                }
+              },
+              "queryRef": "Fact_Audit.ObjectId"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Dim_Operation"
+                    }
+                  },
+                  "Property": "OperationName"
+                }
+              },
+              "queryRef": "Dim_Operation.OperationName"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Dim_User"
+                    }
+                  },
+                  "Property": "UserName"
+                }
+              },
+              "queryRef": "Dim_User.UserName"
+            },
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Fact_Audit"
+                    }
+                  },
+                  "Property": "CreatedOnLocal"
+                }
+              },
+              "queryRef": "Fact_Audit.CreatedOnLocal"
+            }
+          ]
+        }
+      }
+    },
+            "visualContainerObjects": {
+      "background": [
+        {
+          "properties": {
+            "show": { "expr": { "Literal": { "Value": "true" } } },
+            "color": {
+              "solid": {
+                "color": {
+                  "expr": { "Literal": { "Value": "'#FFFFFF'" } }
+                }
+              }
+            },
+            "transparency": { "expr": { "Literal": { "Value": "0" } } }
+          }
+        }
+      ],
+      "border": [
+        {
+          "properties": {
+            "show": { "expr": { "Literal": { "Value": "false" } } }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

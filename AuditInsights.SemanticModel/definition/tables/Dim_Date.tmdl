@@ -1,0 +1,97 @@
+table Dim_Date
+	lineageTag: a6b67425-2c5c-4ca7-88c7-5fd2abe6ac0b
+	dataCategory: Time
+
+	column Date
+		dataType: dateTime
+		isKey
+		formatString: Short Date
+		lineageTag: 53246fff-ce05-4b40-9ce3-b1c5f282dd42
+		summarizeBy: none
+		sourceColumn: Date
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column Year
+		dataType: int64
+		lineageTag: 4ad3d308-5ea6-4689-93da-8c111e5b2b46
+		summarizeBy: none
+		sourceColumn: Year
+
+	column MonthNumber
+		dataType: int64
+		lineageTag: 65e6c076-b23e-4a07-b38d-b0e5441858ca
+		summarizeBy: none
+		sourceColumn: MonthNumber
+
+	column Month
+		dataType: string
+		lineageTag: ac476f9f-267d-4deb-b1c3-8e8016e34484
+		summarizeBy: none
+		sourceColumn: Month
+		sortByColumn: MonthSort
+
+	column MonthSort
+		dataType: int64
+		lineageTag: 0c603b4b-30f1-435b-939f-b0e19d291e5c
+		summarizeBy: none
+		sourceColumn: MonthSort
+
+	column MonthName
+		dataType: string
+		lineageTag: 02d950c9-ae0f-4b2c-af46-d78318908fb1
+		summarizeBy: none
+		sourceColumn: MonthName
+		sortByColumn: MonthNumber
+
+	column DayName
+		dataType: string
+		lineageTag: 996de199-5a2f-4f5a-b5fd-0c778e5b8a4b
+		summarizeBy: none
+		sourceColumn: DayName
+		sortByColumn: DayOfWeek
+
+	column DayOfWeek
+		dataType: int64
+		lineageTag: 7d9bc2b2-b701-4b2b-b06a-e70a6603b479
+		summarizeBy: none
+		sourceColumn: DayOfWeek
+
+	column IsWeekend
+		dataType: boolean
+		lineageTag: ac103b3c-1229-4032-b723-2cfd5ffd0e7a
+		summarizeBy: none
+		sourceColumn: IsWeekend
+
+	column Quarter
+		dataType: string
+		lineageTag: c7bbb0cf-1f75-4cc3-87c3-db0804a1b99b
+		summarizeBy: none
+		sourceColumn: Quarter
+
+	partition Dim_Date = m
+		mode: import
+		source =
+				let
+				    MinDate = try List.Min(Fact_Audit[CreatedDate]) otherwise null,
+				    MaxDate = try List.Max(Fact_Audit[CreatedDate]) otherwise null,
+				    SafeMin = if MinDate = null then Date.From(DateTime.LocalNow()) else MinDate,
+				    SafeMax = if MaxDate = null then Date.From(DateTime.LocalNow()) else MaxDate,
+				    Start = Date.StartOfYear(SafeMin),
+				    End = Date.EndOfYear(SafeMax),
+				    DayCount = Duration.Days(End - Start) + 1,
+				    Dates = List.Dates(Start, DayCount, #duration(1,0,0,0)),
+				    ToTable = Table.FromList(Dates, Splitter.SplitByNothing(), {"Date"}),
+				    Typed = Table.TransformColumnTypes(ToTable, {{"Date", type date}}),
+				    AddYear = Table.AddColumn(Typed, "Year", each Date.Year([Date]), Int64.Type),
+				    AddMonthNum = Table.AddColumn(AddYear, "MonthNumber", each Date.Month([Date]), Int64.Type),
+				    AddMonthSort = Table.AddColumn(AddMonthNum, "MonthSort", each Date.Year([Date]) * 100 + Date.Month([Date]), Int64.Type),
+				    AddMonth = Table.AddColumn(AddMonthSort, "Month", each Date.ToText([Date], [Format="MMM yyyy", Culture="en-US"]), type text),
+				    AddMonthName = Table.AddColumn(AddMonth, "MonthName", each Date.ToText([Date], [Format="MMMM", Culture="en-US"]), type text),
+				    AddDayName = Table.AddColumn(AddMonthName, "DayName", each Date.ToText([Date], [Format="dddd", Culture="en-US"]), type text),
+				    AddDOW = Table.AddColumn(AddDayName, "DayOfWeek", each Date.DayOfWeek([Date], Day.Monday) + 1, Int64.Type),
+				    AddWeekend = Table.AddColumn(AddDOW, "IsWeekend", each Date.DayOfWeek([Date], Day.Monday) >= 5, type logical),
+				    AddQuarter = Table.AddColumn(AddWeekend, "Quarter", each "Q" & Text.From(Date.QuarterOfYear([Date])), type text)
+				in
+				    AddQuarter
+

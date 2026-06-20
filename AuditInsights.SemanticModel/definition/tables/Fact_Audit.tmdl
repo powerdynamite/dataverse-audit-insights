@@ -1,0 +1,99 @@
+table Fact_Audit
+	lineageTag: 5a92a4e4-c197-4665-8e25-9556889a8354
+
+	column AuditId
+		dataType: string
+		lineageTag: 640adc13-6687-4025-99cf-651f21800d8d
+		summarizeBy: none
+		sourceColumn: AuditId
+
+	column Operation
+		dataType: int64
+		lineageTag: fe4bb7ad-486b-4cd4-8e4c-2ac4be50a36b
+		summarizeBy: none
+		sourceColumn: Operation
+
+	column Action
+		dataType: int64
+		lineageTag: 4d17540d-d57f-4044-8c99-d9039c89fd30
+		summarizeBy: none
+		sourceColumn: Action
+
+	column TableName
+		dataType: string
+		lineageTag: 7167d527-71ee-43f8-b0b1-a52beda8f0bd
+		summarizeBy: none
+		sourceColumn: TableName
+
+	column ObjectId
+		dataType: string
+		lineageTag: a723bafe-94ba-40a6-90c9-44577d3597ce
+		summarizeBy: none
+		sourceColumn: ObjectId
+
+	column UserId
+		dataType: string
+		lineageTag: cb2dd547-263d-4d1b-a1dc-3335c9bb0b03
+		summarizeBy: none
+		sourceColumn: UserId
+
+	column CreatedOn
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: ede367fd-bb39-4eb0-9260-70357bbdffdb
+		summarizeBy: none
+		sourceColumn: CreatedOn
+
+	column CreatedOnLocal
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: e6dfa890-e85f-4546-9f58-4755f42594e0
+		summarizeBy: none
+		sourceColumn: CreatedOnLocal
+
+	column CreatedDate
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: b236171d-b032-47f0-a7fd-083d7883cfaa
+		summarizeBy: none
+		sourceColumn: CreatedDate
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column EventHour
+		dataType: int64
+		lineageTag: 8e5f3030-76c4-4980-8b73-1e6606cbf2ad
+		summarizeBy: none
+		sourceColumn: EventHour
+
+	column AfterHours
+		dataType: boolean
+		lineageTag: a93b6a4b-0fb7-4e42-a8f8-a6dcc8d2145f
+		summarizeBy: none
+		sourceColumn: AfterHours
+
+	column HasChangeData
+		dataType: boolean
+		lineageTag: bb6e4b6a-4c71-4678-8356-08b020d5abd7
+		summarizeBy: none
+		sourceColumn: HasChangeData
+
+	partition Fact_Audit = m
+		mode: import
+		source =
+				let
+				    Source = AuditRaw,
+				    Selected = Table.SelectColumns(Source, {"auditid","operation","action","objecttypecode","createdon","changedata","_userid_value","_objectid_value"}, MissingField.UseNull),
+				    Renamed = Table.RenameColumns(Selected, {{"auditid","AuditId"},{"operation","Operation"},{"action","Action"},{"objecttypecode","TableName"},{"createdon","CreatedOn"},{"_userid_value","UserId"},{"_objectid_value","ObjectId"}}),
+				    Typed = Table.TransformColumnTypes(Renamed, {{"CreatedOn", type datetimezone},{"Operation", Int64.Type},{"Action", Int64.Type}}),
+				    LocalTime = Table.AddColumn(Typed, "CreatedOnLocal", each DateTimeZone.RemoveZone([CreatedOn]), type datetime),
+				    AddDate = Table.AddColumn(LocalTime, "CreatedDate", each Date.From([CreatedOnLocal]), type date),
+				    AddHour = Table.AddColumn(AddDate, "EventHour", each Time.Hour([CreatedOnLocal]), Int64.Type),
+				    AddAfterHours = Table.AddColumn(AddHour, "AfterHours", each [EventHour] < 7 or [EventHour] >= 19, type logical),
+				    AddHasCD = Table.AddColumn(AddAfterHours, "HasChangeData", each [changedata] <> null and Text.Trim([changedata]) <> "", type logical),
+				    RemoveCD = Table.RemoveColumns(AddHasCD, {"changedata"})
+				in
+				    RemoveCD
+
+	annotation PBI_ResultType = Table
+

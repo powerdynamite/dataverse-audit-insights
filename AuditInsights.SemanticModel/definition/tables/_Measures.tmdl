@@ -1,0 +1,148 @@
+table _Measures
+	lineageTag: e14b5d08-a115-45e2-9b41-2e62c7b0e2fc
+
+	measure 'Total Audit Events' = COUNTROWS('Fact_Audit')
+		formatString: #,0
+		displayFolder: KPIs
+		lineageTag: 1f8ad9bf-2c2a-42b0-a896-61ca5dc4a2c8
+
+	measure 'Active Users' = DISTINCTCOUNT('Fact_Audit'[UserId])
+		formatString: #,0
+		displayFolder: KPIs
+		lineageTag: 4ada6dd0-1b3f-4c14-81f0-f68cd95bc66f
+
+	measure 'Tables Modified' = CALCULATE(DISTINCTCOUNT('Fact_Audit'[TableName]), 'Fact_Audit'[Operation] IN {1, 2, 3})
+		formatString: #,0
+		displayFolder: KPIs
+		lineageTag: 1c765510-20d4-4903-b29e-07f090939544
+
+	measure 'Records Created' = CALCULATE(COUNTROWS('Fact_Audit'), 'Fact_Audit'[Operation] = 1)
+		formatString: #,0
+		displayFolder: KPIs
+		lineageTag: dcdd5c41-9c6a-4e74-88e2-235a42de4c98
+
+	measure 'Records Updated' = CALCULATE(COUNTROWS('Fact_Audit'), 'Fact_Audit'[Operation] = 2)
+		formatString: #,0
+		displayFolder: KPIs
+		lineageTag: 025f0ea5-eb4e-46eb-a84b-212f234653e0
+
+	measure 'Records Deleted' = CALCULATE(COUNTROWS('Fact_Audit'), 'Fact_Audit'[Operation] = 3)
+		formatString: #,0
+		displayFolder: KPIs
+		lineageTag: 611f98a0-287d-493d-a65e-68594cb98733
+
+	measure 'Access Events' = CALCULATE(COUNTROWS('Fact_Audit'), 'Fact_Audit'[Operation] = 4)
+		formatString: #,0
+		displayFolder: KPIs
+		lineageTag: e06052e2-f2c9-4d23-929b-fd2aedfcf40a
+
+	measure 'Field Changes' = COUNTROWS('Fact_FieldChange')
+		formatString: #,0
+		displayFolder: KPIs
+		lineageTag: 2a968045-8aa5-465e-b234-d4eda0869b33
+
+	measure 'Events per User' = DIVIDE([Total Audit Events], [Active Users])
+		formatString: #,0.0
+		displayFolder: Adoption
+		lineageTag: 64378843-1271-4b42-bdc3-e4ee8884cd09
+
+	measure 'Most Active User' =
+			VAR TopUser =
+			    TOPN(1, VALUES('Dim_User'[UserName]), [Total Audit Events], DESC)
+			RETURN
+			    CONCATENATEX(TopUser, 'Dim_User'[UserName], ", ")
+		displayFolder: Adoption
+		lineageTag: d54da42e-75c2-43f9-a92e-97dbe6fbc8f5
+
+	measure 'Repeated Field Edits' =
+			COUNTROWS(
+			    FILTER(
+			        SUMMARIZE('Fact_FieldChange', 'Fact_FieldChange'[ObjectId], 'Fact_FieldChange'[FieldName], "Cnt", COUNTROWS('Fact_FieldChange')),
+			        [Cnt] > 3
+			    )
+			)
+		formatString: #,0
+		displayFolder: Data Quality
+		lineageTag: 6b56f11b-ea7a-4fbe-8dd4-03076ae49060
+
+	measure 'Avg Edits per Field' =
+			AVERAGEX(
+			    SUMMARIZE('Fact_FieldChange', 'Fact_FieldChange'[ObjectId], 'Fact_FieldChange'[FieldName], "Cnt", COUNTROWS('Fact_FieldChange')),
+			    [Cnt]
+			)
+		formatString: #,0.0
+		displayFolder: Data Quality
+		lineageTag: 19337d1f-0041-4a5a-9134-6fde1f547d3e
+
+	measure 'Bulk Operation Days' =
+			COUNTROWS(
+			    FILTER(
+			        SUMMARIZE('Fact_Audit', 'Fact_Audit'[UserId], 'Fact_Audit'[CreatedDate], "Cnt", COUNTROWS('Fact_Audit')),
+			        [Cnt] > 50
+			    )
+			)
+		formatString: #,0
+		displayFolder: Data Quality
+		lineageTag: c273dff3-0ad9-4c1d-bac1-bb38c02cc0d2
+
+	measure 'After-Hours Events' = CALCULATE(COUNTROWS('Fact_Audit'), 'Fact_Audit'[AfterHours] = TRUE())
+		formatString: #,0
+		displayFolder: Governance
+		lineageTag: bff687d4-1efc-462f-9983-7d64e9cf6c5e
+
+	measure 'After-Hours %' = DIVIDE([After-Hours Events], [Total Audit Events])
+		formatString: 0.0%
+		displayFolder: Governance
+		lineageTag: 1be2fe8e-87ce-438c-a453-d8210251a3c4
+
+	measure 'Weekend Events' = CALCULATE(COUNTROWS('Fact_Audit'), 'Dim_Date'[IsWeekend] = TRUE())
+		formatString: #,0
+		displayFolder: Governance
+		lineageTag: 48dc5028-6e9b-4332-a41c-68bfeaa47530
+
+	measure 'Bulk Delete Days' =
+			COUNTROWS(
+			    FILTER(
+			        SUMMARIZE(CALCULATETABLE('Fact_Audit', 'Fact_Audit'[Operation] = 3), 'Fact_Audit'[UserId], 'Fact_Audit'[CreatedDate], "Cnt", COUNTROWS('Fact_Audit')),
+			        [Cnt] > 10
+			    )
+			)
+		formatString: #,0
+		displayFolder: Governance
+		lineageTag: 87e48507-d467-42b0-94b4-c9c20e7b84eb
+
+	measure 'Events Prev Month' = CALCULATE([Total Audit Events], DATEADD('Dim_Date'[Date], -1, MONTH))
+		formatString: #,0
+		displayFolder: Time Intelligence
+		lineageTag: 546ed690-b0ca-4726-bf2c-5dc5046bff96
+
+	measure 'Events MoM %' = DIVIDE([Total Audit Events] - [Events Prev Month], [Events Prev Month])
+		formatString: 0.0%
+		displayFolder: Time Intelligence
+		lineageTag: 44a9c8f1-dda6-44b8-af6b-bdb26f38d243
+
+	measure 'Records Created YTD' = TOTALYTD([Records Created], 'Dim_Date'[Date])
+		formatString: #,0
+		displayFolder: Time Intelligence
+		lineageTag: 9981e39d-6fd6-4a95-b3d5-8fc5d8d85acc
+
+	measure 'Cumulative Records Created' =
+			CALCULATE(
+			    [Records Created],
+			    FILTER(ALLSELECTED('Dim_Date'[Date]), 'Dim_Date'[Date] <= MAX('Dim_Date'[Date]))
+			)
+		formatString: #,0
+		displayFolder: Time Intelligence
+		lineageTag: 50e74b44-2cbb-4b06-bba3-29956dfeb55c
+
+	column Value
+		dataType: int64
+		isHidden
+		lineageTag: 405609a9-f814-4260-a260-43f433d46aaa
+		summarizeBy: none
+		sourceColumn: [Value]
+
+	partition Measures = calculated
+		mode: import
+		source = ROW("Value", BLANK())
+

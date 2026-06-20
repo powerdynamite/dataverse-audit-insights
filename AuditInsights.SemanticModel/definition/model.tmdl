@@ -1,0 +1,24 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	sourceQueryCulture: en-US
+	dataAccessOptions
+		legacyRedirects
+		returnErrorValuesAsNull
+
+annotation PBI_QueryOrder = ["DataverseEnvironmentUrl","AuditHistoryDays","AuditRaw","Fact_Audit","Fact_FieldChange","Dim_User","Dim_Table","Dim_Operation","Dim_Date"]
+
+annotation __PBI_TimeIntelligenceEnabled = 0
+
+annotation PBI_ProTooling = ["DevMode"]
+
+ref table Dim_Date
+ref table Dim_Operation
+ref table Dim_Table
+ref table Dim_User
+ref table Fact_Audit
+ref table Fact_FieldChange
+ref table _Measures
+
+ref cultureInfo en-US
+

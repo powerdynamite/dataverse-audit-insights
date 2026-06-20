@@ -1,0 +1,97 @@
+{
+  "name": "CY25SU12",
+  "dataColors": [
+    "#1A73E8",
+    "#34A853",
+    "#FBBC04",
+    "#EA4335",
+    "#9334E6",
+    "#12B5CB",
+    "#FF6D01",
+    "#5F6368",
+    "#A8DAB5",
+    "#669DF6"
+  ],
+  "foreground": "#FFFFFF",
+  "foregroundNeutralSecondary": "#9AA0A6",
+  "background": "#202124",
+  "backgroundLight": "#2C2E30",
+  "tableAccent": "#1A73E8",
+  "good": "#34A853",
+  "neutral": "#FBBC04",
+  "bad": "#EA4335",
+  "visualStyles": {
+    "*": {
+      "*": {
+        "background": [
+          {
+            "color": {
+              "solid": {
+                "color": "#2C2E30"
+              }
+            },
+            "transparency": 0
+          }
+        ],
+        "title": [
+          {
+            "fontColor": {
+              "solid": {
+                "color": "#FFFFFF"
+              }
+            },
+            "fontSize": 11,
+            "fontFamily": "Segoe UI",
+            "bold": true
+          }
+        ],
+        "legend": [
+          {
+            "labelColor": {
+              "solid": {
+                "color": "#9AA0A6"
+              }
+            }
+          }
+        ],
+        "labels": [
+          {
+            "color": {
+              "solid": {
+                "color": "#FFFFFF"
+              }
+            }
+          }
+        ],
+        "categoryAxis": [
+          {
+            "labelColor": {
+              "solid": {
+                "color": "#9AA0A6"
+              }
+            },
+            "gridlineColor": {
+              "solid": {
+                "color": "#3C4043"
+              }
+            }
+          }
+        ],
+        "valueAxis": [
+          {
+            "labelColor": {
+              "solid": {
+                "color": "#9AA0A6"
+              }
+            },
+            "gridlineColor": {
+              "solid": {
+                "color": "#3C4043"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

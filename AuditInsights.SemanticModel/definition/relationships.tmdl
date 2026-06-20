@@ -1,0 +1,28 @@
+relationship rel_FactAudit_User
+	fromColumn: Fact_Audit.UserId
+	toColumn: Dim_User.UserId
+
+relationship rel_FactAudit_Table
+	fromColumn: Fact_Audit.TableName
+	toColumn: Dim_Table.TableName
+
+relationship rel_FactAudit_Operation
+	fromColumn: Fact_Audit.Operation
+	toColumn: Dim_Operation.Operation
+
+relationship rel_FactAudit_Date
+	fromColumn: Fact_Audit.CreatedDate
+	toColumn: Dim_Date.Date
+
+relationship rel_FactFieldChange_User
+	fromColumn: Fact_FieldChange.UserId
+	toColumn: Dim_User.UserId
+
+relationship rel_FactFieldChange_Table
+	fromColumn: Fact_FieldChange.TableName
+	toColumn: Dim_Table.TableName
+
+relationship rel_FactFieldChange_Date
+	fromColumn: Fact_FieldChange.CreatedDate
+	toColumn: Dim_Date.Date
+

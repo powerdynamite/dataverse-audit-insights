@@ -1,0 +1,28 @@
+table Dim_Table
+	lineageTag: d5a208ba-6556-4342-b827-6092f3398b0b
+
+	column TableName
+		dataType: string
+		isKey
+		lineageTag: f32300cc-1f71-4178-9235-e896803e371d
+		summarizeBy: none
+		sourceColumn: TableName
+
+	column TableDisplayName
+		dataType: string
+		lineageTag: febe48bc-c494-4218-8e11-5daa5da0b181
+		summarizeBy: none
+		sourceColumn: TableDisplayName
+
+	partition Dim_Table = m
+		mode: import
+		source =
+				let
+				    Source = OData.Feed(DataverseEnvironmentUrl & "/api/data/v9.2/EntityDefinitions?$select=LogicalName,DisplayName", null, [Implementation="2.0", ODataVersion=4]),
+				    AddLabel = Table.AddColumn(Source, "DisplayLabel", each try [DisplayName][UserLocalizedLabel][Label] otherwise [LogicalName], type text),
+				    Selected = Table.SelectColumns(AddLabel, {"LogicalName","DisplayLabel"}, MissingField.UseNull),
+				    Renamed = Table.RenameColumns(Selected, {{"LogicalName","TableName"},{"DisplayLabel","TableDisplayName"}}),
+				    Typed = Table.TransformColumnTypes(Renamed, {{"TableName", type text},{"TableDisplayName", type text}})
+				in
+				    Typed
+

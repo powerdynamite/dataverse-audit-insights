@@ -1,0 +1,39 @@
+table Dim_Operation
+	isHidden
+	lineageTag: 779b7422-d27b-4218-9bfa-a88984df6a4c
+
+	column Operation
+		dataType: int64
+		isHidden
+		isKey
+		lineageTag: c9657e64-7902-461b-bba9-eed4973361bd
+		summarizeBy: none
+		sourceColumn: Operation
+
+		changedProperty = IsHidden
+
+	column OperationName
+		dataType: string
+		isHidden
+		lineageTag: 1fb088f8-8acc-4318-9264-a1bf5f81c7ae
+		summarizeBy: none
+		sourceColumn: OperationName
+
+		changedProperty = IsHidden
+
+	partition Dim_Operation = m
+		mode: import
+		source =
+				let
+				    Source = #table(
+				        type table [Operation = Int64.Type, OperationName = text],
+				        {
+				            {1,"Create"},{2,"Update"},{3,"Delete"},{4,"Access"},
+				            {5,"Upsert"},{115,"Archive"},{116,"Retain"},{117,"RollbackRetain"},
+				            {118,"Restore"},{200,"CustomOperation"}
+				        })
+				in
+				    Source
+
+	changedProperty = IsHidden
+

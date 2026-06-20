@@ -1,0 +1,25 @@
+{
+  "version": "1.0",
+  "appId": "a3db53a0-2299-45fd-8884-dfd052551f67",
+  "appDisplayName": "Audit Restore",
+  "region": "prod",
+  "environmentId": "Default-9ffd1050-5319-41ca-b384-09122ed336d0",
+  "description": "Record-level audit history viewer and field-level restore for Dataverse.",
+  "buildPath": "./dist",
+  "buildEntryPoint": "index.html",
+  "localAppUrl": "http://localhost:3000",
+  "logoPath": "Default",
+  "connectionReferences": {
+    "35a0d83c-a94d-4a06-8a76-33cc5dfecff0": {
+      "id": "/providers/Microsoft.PowerApps/apis/shared_commondataserviceforapps",
+      "displayName": "Microsoft Dataverse",
+      "dataSources": [
+        "commondataserviceforapps"
+      ],
+      "dataSets": {
+        "https://org723efd4d.crm.dynamics.com": {}
+      }
+    }
+  },
+  "databaseReferences": {}
+}

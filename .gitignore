@@ -1,0 +1,13 @@
+# Power BI local cache
+**/.pbi/localSettings.json
+**/.pbi/cache.abf
+
+# Code app
+code-app/node_modules/
+code-app/dist/
+code-app/.env
+
+# Misc
+.claude/
+canvas-app/
+powerapp-code-app-skill/

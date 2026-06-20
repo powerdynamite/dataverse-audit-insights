@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Report",
+    "displayName": "AuditInsights"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "07764087-6cc7-4340-bda3-8d6381ffcaa7"
+  }
+}

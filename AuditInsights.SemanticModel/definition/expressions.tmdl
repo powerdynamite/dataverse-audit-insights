@@ -1,0 +1,25 @@
+expression DataverseEnvironmentUrl = "https://org723efd4d.crm.dynamics.com" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+	lineageTag: 1a2b3c4d-0001-0000-0000-000000000001
+
+	annotation PBI_ResultType = Text
+
+	annotation PBI_NavigationStepName = Navigation
+
+expression AuditHistoryDays = 365 meta [IsParameterQuery=true, Type="Number", IsParameterQueryRequired=true]
+	lineageTag: 1a2b3c4d-0001-0000-0000-000000000002
+
+	annotation PBI_ResultType = Number
+
+expression AuditRaw =
+		let
+		    Cutoff = DateTimeZone.RemoveZone(DateTimeZone.UtcNow()) - #duration(AuditHistoryDays, 0, 0, 0),
+		    CutoffText = DateTime.ToText(Cutoff, [Format="yyyy-MM-ddTHH:mm:ssZ", Culture="en-US"]),
+		    BaseUrl = DataverseEnvironmentUrl & "/api/data/v9.2/audits",
+		    Options = "?$select=auditid,operation,action,objecttypecode,createdon,changedata,_userid_value,_objectid_value&$filter=createdon ge " & CutoffText,
+		    Source = OData.Feed(BaseUrl & Options, null, [Implementation="2.0", ODataVersion=4])
+		in
+		    Source
+	lineageTag: 08ffdf0b-2e5c-49af-8bf3-f7dd8893d6b2
+
+	annotation PBI_ResultType = Table
+

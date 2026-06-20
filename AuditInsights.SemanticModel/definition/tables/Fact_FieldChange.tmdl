@@ -1,0 +1,95 @@
+table Fact_FieldChange
+	lineageTag: e51ef26a-53ba-4c27-b09c-1685d2459ef1
+
+	column AuditId
+		dataType: string
+		lineageTag: f8569679-6fa4-412b-ae4c-3bf7bfc44b59
+		summarizeBy: none
+		sourceColumn: AuditId
+
+	column TableName
+		dataType: string
+		lineageTag: e1546f8f-9ee5-4cdb-83ae-cb334c1704d8
+		summarizeBy: none
+		sourceColumn: TableName
+
+	column ObjectId
+		dataType: string
+		lineageTag: ab1a1f9e-168d-40ff-a45e-ddae61dda154
+		summarizeBy: none
+		sourceColumn: ObjectId
+
+	column UserId
+		dataType: string
+		lineageTag: 85e022c3-d592-46dd-b32c-bdce73696344
+		summarizeBy: none
+		sourceColumn: UserId
+
+	column FieldName
+		dataType: string
+		lineageTag: 399c5b59-3937-41e9-bedd-bb9e7196a6e5
+		summarizeBy: none
+		sourceColumn: FieldName
+
+	column OldValue
+		dataType: string
+		lineageTag: 5b35b0d5-4a44-429b-aebc-334d872d4d9a
+		summarizeBy: none
+		sourceColumn: OldValue
+
+	column NewValue
+		dataType: string
+		lineageTag: e88067cc-09f3-4744-adb1-295bd19ea74f
+		summarizeBy: none
+		sourceColumn: NewValue
+
+	column OldValueDisplay
+		dataType: string
+		lineageTag: 63528878-e7b2-4435-bcc7-7192b376a37c
+		summarizeBy: none
+		sourceColumn: OldValueDisplay
+
+	column NewValueDisplay
+		dataType: string
+		lineageTag: feb19fb4-8c1d-439b-a835-ad0a0ec86e54
+		summarizeBy: none
+		sourceColumn: NewValueDisplay
+
+	column CreatedOn
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 3612d763-4ea0-42e7-9a9c-122475f0677f
+		summarizeBy: none
+		sourceColumn: CreatedOn
+
+	column CreatedDate
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: e47a726e-1af5-4370-82e3-8aba525713b8
+		summarizeBy: none
+		sourceColumn: CreatedDate
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	partition Fact_FieldChange = m
+		mode: import
+		source =
+				let
+				    Source = AuditRaw,
+				    OnlyChanges = Table.SelectRows(Source, each [changedata] <> null and Text.Trim([changedata]) <> ""),
+				    Selected = Table.SelectColumns(OnlyChanges, {"auditid","objecttypecode","createdon","_userid_value","_objectid_value","changedata"}, MissingField.UseNull),
+				    Parsed = Table.AddColumn(Selected, "cd", each try Json.Document([changedata]) otherwise null),
+				    HasAttrs = Table.SelectRows(Parsed, each [cd] <> null and Value.Is([cd], type record) and Record.HasFields([cd], "changedAttributes")),
+				    Attrs = Table.AddColumn(HasAttrs, "attr", each [cd][changedAttributes]),
+				    Expanded = Table.ExpandListColumn(Attrs, "attr"),
+				    NotNull = Table.SelectRows(Expanded, each [attr] <> null),
+				    Fields = Table.ExpandRecordColumn(NotNull, "attr", {"logicalName","oldValue","newValue","oldName","newName"}, {"FieldName","OldValue","NewValue","OldName","NewName"}),
+				    Renamed = Table.RenameColumns(Fields, {{"auditid","AuditId"},{"objecttypecode","TableName"},{"createdon","CreatedOn"},{"_userid_value","UserId"},{"_objectid_value","ObjectId"}}),
+				    Typed = Table.TransformColumnTypes(Renamed, {{"CreatedOn", type datetimezone},{"FieldName", type text},{"OldValue", type text},{"NewValue", type text}}),
+				    AddOldDisplay = Table.AddColumn(Typed, "OldValueDisplay", each if [OldName] <> null and [OldName] <> "" then [OldName] else [OldValue], type text),
+				    AddNewDisplay = Table.AddColumn(AddOldDisplay, "NewValueDisplay", each if [NewName] <> null and [NewName] <> "" then [NewName] else [NewValue], type text),
+				    AddDate = Table.AddColumn(AddNewDisplay, "CreatedDate", each Date.From(DateTimeZone.RemoveZone([CreatedOn])), type date),
+				    RemoveCD = Table.RemoveColumns(AddDate, {"changedata","cd","OldName","NewName"})
+				in
+				    RemoveCD
+

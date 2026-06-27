@@ -429,6 +429,7 @@ export interface RecreateResult {
 export interface SmartRestoreResult {
   method: "recycle-bin" | "audit-snapshot";
   childRecordsRestored: boolean;
+  orphanedChildrenRelinked: number;
   recreateDetail?: RecreateResult;
 }
 
@@ -465,25 +466,110 @@ async function restoreViaRecycleBin(ctx: RecordContext): Promise<void> {
 }
 
 /**
+ * After the parent is restored, find any children that were orphaned via RemoveLink
+ * (their lookup was set to null when parent was deleted) and re-link them back.
+ * Detects these by looking for Update audit events on child records that happened
+ * within a ±10s window of the parent delete, where a lookup field changed from
+ * the parent record ID to null.
+ */
+async function relinkOrphanedChildren(
+  ctx: RecordContext,
+  deletedOnIso: string
+): Promise<number> {
+  const deleteMs = new Date(deletedOnIso).getTime();
+  const windowStart = new Date(deleteMs - 10_000).toISOString();
+  const windowEnd   = new Date(deleteMs + 10_000).toISOString();
+  const nowIso      = new Date().toISOString();
+
+  const result = await MicrosoftDataverseService.ListRecordsWithOrganization(
+    ORG_URL, "audits", undefined, "application/json", NO_META, NO_MIP,
+    "auditid,_objectid_value,objecttypecode,changedata",
+    `operation eq 2 and createdon ge ${windowStart} and createdon le ${windowEnd} and createdon le ${nowIso}`,
+    undefined, undefined, undefined, 200
+  );
+  if (!result.success) return 0;
+
+  const rows = listValue(result.data);
+  let relinked = 0;
+
+  for (const row of rows) {
+    const cd = row["changedata"] as string | null;
+    if (!cd) continue;
+
+    try {
+      const parsed = JSON.parse(cd) as {
+        changedAttributes?: { logicalName: string; oldValue: string | null; newValue: string | null }[];
+      };
+
+      // Find an attribute whose old value references our parent record ID and new value is null
+      const parentLookupChange = parsed.changedAttributes?.find((a) => {
+        const old = a.oldValue ?? "";
+        return old.includes(ctx.recordId) && (a.newValue === null || a.newValue === "");
+      });
+      if (!parentLookupChange) continue;
+
+      const childRecordId = String(row["_objectid_value"] ?? "");
+      const childTable    = String(row["objecttypecode"] ?? "");
+      if (!childRecordId || !childTable) continue;
+
+      const childEntitySet  = await getEntitySetName(childTable);
+      const parentEntitySet = await getEntitySetName(ctx.tableLogicalName);
+
+      // Re-link: PATCH the lookup field back to the restored parent
+      const patchBody: Record<string, unknown> = {
+        [`${parentLookupChange.logicalName}@odata.bind`]: `/${parentEntitySet}(${ctx.recordId})`
+      };
+
+      const patchResult = await MicrosoftDataverseService.UpdateOnlyRecordWithOrganization(
+        "return=representation", "application/json", "*",
+        ORG_URL, childEntitySet, childRecordId, patchBody, NO_META
+      );
+      if (patchResult.success) relinked++;
+    } catch { /* non-fatal — continue to next row */ }
+  }
+
+  return relinked;
+}
+
+/**
  * Smart restore for Delete events.
- * - Within 30 days → Recycle Bin (cascaded children restored automatically).
- * - Older than 30 days, OR Recycle Bin unavailable → recreate from audit snapshot.
+ * Phase 1: Restore the parent (Recycle Bin ≤30 days, else audit snapshot).
+ * Phase 2: Re-link any children orphaned via RemoveLink relationships.
+ *
+ * Handles both relationship types:
+ * - Parental/Cascade → children deleted + auto-restored by Recycle Bin
+ * - RemoveLink       → children orphaned (lookup cleared) → re-linked by phase 2
  */
 export async function smartDeleteRestore(
   ctx: RecordContext,
   deletedOnIso: string,
   rows: DiffRow[]
 ): Promise<SmartRestoreResult> {
+  let method: SmartRestoreResult["method"];
+  let childRecordsRestored = false;
+  let recreateDetail: RecreateResult | undefined;
+
   if (isWithinRecycleBinWindow(deletedOnIso)) {
     try {
       await restoreViaRecycleBin(ctx);
-      return { method: "recycle-bin", childRecordsRestored: true };
+      method = "recycle-bin";
+      childRecordsRestored = true;
     } catch {
-      // Recycle Bin unavailable or record not in bin — fall through to snapshot
+      // Recycle Bin unavailable — fall through to snapshot
+      const detail = await recreateRecord(ctx, rows);
+      method = "audit-snapshot";
+      recreateDetail = detail;
     }
+  } else {
+    const detail = await recreateRecord(ctx, rows);
+    method = "audit-snapshot";
+    recreateDetail = detail;
   }
-  const detail = await recreateRecord(ctx, rows);
-  return { method: "audit-snapshot", childRecordsRestored: false, recreateDetail: detail };
+
+  // Phase 2: re-link orphaned children regardless of restore method
+  const orphanedChildrenRelinked = await relinkOrphanedChildren(ctx, deletedOnIso);
+
+  return { method, childRecordsRestored, orphanedChildrenRelinked, recreateDetail };
 }
 
 export async function recreateRecord(

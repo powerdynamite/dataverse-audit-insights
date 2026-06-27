@@ -118,7 +118,10 @@ export function FieldDiff({
             {smartRestoreResult.method === "recycle-bin" ? (
               <>
                 <strong>Record restored from Recycle Bin.</strong>{" "}
-                Child records (tasks, notes, activities) were also recovered automatically.
+                Cascade-deleted children were recovered automatically.
+                {smartRestoreResult.orphanedChildrenRelinked > 0 && (
+                  <> Additionally, <strong>{smartRestoreResult.orphanedChildrenRelinked}</strong> orphaned child record{smartRestoreResult.orphanedChildrenRelinked === 1 ? " was" : "s were"} re-linked (RemoveLink relationship).</>
+                )}
               </>
             ) : (
               <>
@@ -128,6 +131,9 @@ export function FieldDiff({
                     {smartRestoreResult.recreateDetail.restoredFields.length} field(s) written
                     {smartRestoreResult.recreateDetail.linkedLookups.length > 0 &&
                       `, ${smartRestoreResult.recreateDetail.linkedLookups.length} relationship(s) re-linked`}.
+                    {smartRestoreResult.orphanedChildrenRelinked > 0 && (
+                      <> <strong>{smartRestoreResult.orphanedChildrenRelinked}</strong> orphaned child record{smartRestoreResult.orphanedChildrenRelinked === 1 ? " was" : "s were"} also re-linked.</>
+                    )}
                     {smartRestoreResult.recreateDetail.skippedLookups.length > 0 && (
                       <details className="recreate-detail">
                         <summary style={{ color: "#d97706" }}>

@@ -1,5 +1,5 @@
 import { type AuditEntry, type DiffRow } from "../types";
-import { type RecreateResult } from "../services/auditService";
+import { type SmartRestoreResult, isWithinRecycleBinWindow } from "../services/auditService";
 import { formatFieldName, formatDate } from "../utils/format";
 
 function isLookupRow(r: DiffRow): boolean {
@@ -24,26 +24,27 @@ export function FieldDiff({
   onToggle,
   onToggleAll,
   onRestore,
-  onRecreate,
+  onSmartRestore,
   onBack,
   busy,
   restoreResult,
-  recreateResult
+  smartRestoreResult
 }: {
   entry: AuditEntry;
   rows: DiffRow[];
   onToggle: (logicalName: string) => void;
   onToggleAll: (select: boolean) => void;
   onRestore: () => void;
-  onRecreate: () => void;
+  onSmartRestore: () => void;
   onBack: () => void;
   busy: boolean;
   restoreResult: string | null;
-  recreateResult: RecreateResult | null;
+  smartRestoreResult: SmartRestoreResult | null;
 }) {
   const isDelete = entry.operation === 3;
   const isCreate = entry.operation === 1;
   const isUpdate = entry.operation === 2;
+  const inRecycleBin = isDelete && isWithinRecycleBinWindow(entry.createdOn);
 
   const selectableRows = rows.filter((r) => !isLookupRow(r));
   const selectedCount  = rows.filter((r) => r.selected).length;
@@ -69,13 +70,22 @@ export function FieldDiff({
       </div>
 
       {/* ── Event-type context banners ── */}
-      {isDelete && !recreateResult && (
+      {isDelete && !smartRestoreResult && inRecycleBin && (
+        <div className="banner banner--ok">
+          <span className="banner__icon">♻</span>
+          <div>
+            <strong>This record is in the Recycle Bin.</strong> Deleted {formatDate(entry.createdOn)} — within the 30-day window.
+            Restoring will also recover related child records (tasks, notes, activities) automatically.
+          </div>
+        </div>
+      )}
+      {isDelete && !smartRestoreResult && !inRecycleBin && (
         <div className="banner banner--warn">
           <span className="banner__icon">🗑</span>
           <div>
-            <strong>This record was deleted.</strong> The values below were its last known state.
-            Click <strong>Recreate record</strong> to restore it with the same ID.
-            {lookupCount > 0 && <> Relationship fields ({lookupCount}) must be re-linked manually after recreation.</>}
+            <strong>This record was deleted and is outside the 30-day Recycle Bin window.</strong>{" "}
+            It will be recreated from the audit snapshot below with the same record ID.
+            {lookupCount > 0 && <> Relationship fields ({lookupCount}) must be re-linked manually.</>}
           </div>
         </div>
       )}
@@ -100,35 +110,39 @@ export function FieldDiff({
         </div>
       )}
 
-      {/* ── Recreate success ── */}
-      {recreateResult && (
+      {/* ── Smart restore success ── */}
+      {smartRestoreResult && (
         <div className="banner banner--ok">
           <span className="banner__icon">✅</span>
           <div>
-            <strong>Record recreated successfully.</strong>{" "}
-            {recreateResult.restoredFields.length} field(s) written
-            {recreateResult.linkedLookups.length > 0 && `, ${recreateResult.linkedLookups.length} relationship(s) re-linked`}.
-            {recreateResult.linkedLookups.length > 0 && (
-              <details className="recreate-detail">
-                <summary>Re-linked: {recreateResult.linkedLookups.map(formatFieldName).join(", ")}</summary>
-                <ul>
-                  {recreateResult.linkedLookups.map((f) => (
-                    <li key={f}>{formatFieldName(f)} <span className="mono">({f})</span></li>
-                  ))}
-                </ul>
-              </details>
-            )}
-            {recreateResult.skippedLookups.length > 0 && (
-              <details className="recreate-detail">
-                <summary style={{ color: "#d97706" }}>
-                  ⚠ {recreateResult.skippedLookups.length} relationship(s) need manual re-linking
-                </summary>
-                <ul>
-                  {recreateResult.skippedLookups.map((f) => (
-                    <li key={f}>{formatFieldName(f)} <span className="mono">({f})</span></li>
-                  ))}
-                </ul>
-              </details>
+            {smartRestoreResult.method === "recycle-bin" ? (
+              <>
+                <strong>Record restored from Recycle Bin.</strong>{" "}
+                Child records (tasks, notes, activities) were also recovered automatically.
+              </>
+            ) : (
+              <>
+                <strong>Record recreated from audit snapshot.</strong>{" "}
+                {smartRestoreResult.recreateDetail && (
+                  <>
+                    {smartRestoreResult.recreateDetail.restoredFields.length} field(s) written
+                    {smartRestoreResult.recreateDetail.linkedLookups.length > 0 &&
+                      `, ${smartRestoreResult.recreateDetail.linkedLookups.length} relationship(s) re-linked`}.
+                    {smartRestoreResult.recreateDetail.skippedLookups.length > 0 && (
+                      <details className="recreate-detail">
+                        <summary style={{ color: "#d97706" }}>
+                          ⚠ {smartRestoreResult.recreateDetail.skippedLookups.length} relationship(s) need manual re-linking
+                        </summary>
+                        <ul>
+                          {smartRestoreResult.recreateDetail.skippedLookups.map((f) => (
+                            <li key={f}>{formatFieldName(f)} <span className="mono">({f})</span></li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -213,16 +227,21 @@ export function FieldDiff({
       </table>
 
       {/* ── Action footer ── */}
-      {!recreateResult && !restoreResult && (
+      {!smartRestoreResult && !restoreResult && (
         <div className="diff-footer">
           {isDelete && (
             <>
               <span className="diff-footer__note">
-                {writableCount} field{writableCount === 1 ? "" : "s"} will be written
-                {lookupCount > 0 && ` · ${lookupCount} relationship field${lookupCount === 1 ? "" : "s"} skipped`}
+                {inRecycleBin
+                  ? "Child records will be recovered automatically"
+                  : `${writableCount} field${writableCount === 1 ? "" : "s"} will be written${lookupCount > 0 ? ` · ${lookupCount} relationship field${lookupCount === 1 ? "" : "s"} skipped` : ""}`
+                }
               </span>
-              <button className="primary btn--green" disabled={busy} onClick={onRecreate}>
-                {busy ? "Recreating…" : "Recreate this record"}
+              <button className="primary btn--green" disabled={busy} onClick={onSmartRestore}>
+                {busy
+                  ? (inRecycleBin ? "Restoring…" : "Recreating…")
+                  : (inRecycleBin ? "Restore via Recycle Bin" : "Recreate from audit snapshot")
+                }
               </button>
             </>
           )}

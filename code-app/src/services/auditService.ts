@@ -332,13 +332,73 @@ async function resolveLookupEntitySet(entityType: string): Promise<string> {
   return entityType;
 }
 
-// ── Recreate (Delete events) ──────────────────────────────────────────────────
+// ── Smart Restore Engine ──────────────────────────────────────────────────────
 
 export interface RecreateResult {
   linkedLookups:  string[];
   skippedLookups: string[];
   skippedSystem:  string[];
   restoredFields: string[];
+}
+
+export interface SmartRestoreResult {
+  method: "recycle-bin" | "audit-snapshot";
+  childRecordsRestored: boolean;
+  recreateDetail?: RecreateResult;
+}
+
+/** True if the deletion happened within the Dataverse 30-day Recycle Bin window. */
+export function isWithinRecycleBinWindow(deletedOnIso: string): boolean {
+  const deletedMs    = new Date(deletedOnIso).getTime();
+  const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+  return Date.now() - deletedMs < thirtyDaysMs;
+}
+
+/**
+ * Call the Dataverse Recycle Bin API to restore a deleted record.
+ * Also restores cascaded child records automatically.
+ * POST /api/data/v9.2/RestoreDeletedRecordsAsync
+ */
+async function restoreViaRecycleBin(ctx: RecordContext): Promise<void> {
+  const body = {
+    Target: {
+      "@odata.type": `Microsoft.Dynamics.CRM.${ctx.tableLogicalName}`,
+      [`${ctx.tableLogicalName}id`]: ctx.recordId
+    }
+  };
+  const result = await MicrosoftDataverseService.CreateRecordWithOrganization(
+    "return=representation",
+    "application/json",
+    ORG_URL,
+    "RestoreDeletedRecordsAsync",
+    body,
+    NO_META
+  );
+  if (!result.success) {
+    throw new Error(`Recycle Bin API failed: ${JSON.stringify(result.error)}`);
+  }
+}
+
+/**
+ * Smart restore for Delete events.
+ * - Within 30 days → Recycle Bin (cascaded children restored automatically).
+ * - Older than 30 days, OR Recycle Bin unavailable → recreate from audit snapshot.
+ */
+export async function smartDeleteRestore(
+  ctx: RecordContext,
+  deletedOnIso: string,
+  rows: DiffRow[]
+): Promise<SmartRestoreResult> {
+  if (isWithinRecycleBinWindow(deletedOnIso)) {
+    try {
+      await restoreViaRecycleBin(ctx);
+      return { method: "recycle-bin", childRecordsRestored: true };
+    } catch {
+      // Recycle Bin unavailable or record not in bin — fall through to snapshot
+    }
+  }
+  const detail = await recreateRecord(ctx, rows);
+  return { method: "audit-snapshot", childRecordsRestored: false, recreateDetail: detail };
 }
 
 export async function recreateRecord(

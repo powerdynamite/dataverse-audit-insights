@@ -4,8 +4,8 @@ import {
   retrieveChangeHistory,
   buildDiffRows,
   restoreFields,
-  recreateRecord,
-  type RecreateResult
+  smartDeleteRestore,
+  type SmartRestoreResult
 } from "./services/auditService";
 import { RecordLookup } from "./components/RecordLookup";
 import { ChangeHistory } from "./components/ChangeHistory";
@@ -31,9 +31,9 @@ export function App() {
   const [rows, setRows]               = useState<DiffRow[]>([]);
   const [busy, setBusy]               = useState(false);
   const [error, setError]             = useState<string | null>(null);
-  const [restoreResult, setRestoreResult]   = useState<string | null>(null);
-  const [recreateResult, setRecreateResult] = useState<RecreateResult | null>(null);
-  const [bulkEntries, setBulkEntries]       = useState<AuditEntry[]>([]);
+  const [restoreResult, setRestoreResult]         = useState<string | null>(null);
+  const [smartRestoreResult, setSmartRestoreResult] = useState<SmartRestoreResult | null>(null);
+  const [bulkEntries, setBulkEntries]             = useState<AuditEntry[]>([]);
 
   async function load(target: RecordContext) {
     setBusy(true); setError(null);
@@ -67,7 +67,7 @@ export function App() {
     setSelected(entry);
     setRows(buildDiffRows(entry));
     setRestoreResult(null);
-    setRecreateResult(null);
+    setSmartRestoreResult(null);
     setView("diff");
   }
 
@@ -95,11 +95,12 @@ export function App() {
     } finally { setBusy(false); }
   }
 
-  async function doRecreate() {
+  async function doSmartRestore() {
+    if (!selected) return;
     setBusy(true); setError(null);
     try {
-      const result = await recreateRecord(ctx, rows);
-      setRecreateResult(result);
+      const result = await smartDeleteRestore(ctx, selected.createdOn, rows);
+      setSmartRestoreResult(result);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally { setBusy(false); }
@@ -158,11 +159,11 @@ export function App() {
             onToggle={toggle}
             onToggleAll={toggleAll}
             onRestore={doRestore}
-            onRecreate={doRecreate}
+            onSmartRestore={doSmartRestore}
             onBack={() => setView("history")}
             busy={busy}
             restoreResult={restoreResult}
-            recreateResult={recreateResult}
+            smartRestoreResult={smartRestoreResult}
           />
         )}
       </div>

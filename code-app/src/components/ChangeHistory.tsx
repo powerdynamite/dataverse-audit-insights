@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { type AuditEntry, type RecordContext } from "../types";
-import { formatFieldName, formatDate } from "../utils/format";
+import { formatFieldName, formatDate, exportToCsv } from "../utils/format";
 
 const PBI_URL =
   "https://app.powerbi.com/groups/me/reports/d00711d6-7697-408a-9287-fb11005fd6b8/page001useractivity?experience=power-bi";
@@ -93,6 +93,14 @@ export function ChangeHistory({
           >
             ↗ Power BI Report
           </button>
+          {entries.length > 0 && (
+            <button
+              onClick={() => exportToCsv(entries, ctx)}
+              title="Export full audit history as CSV"
+            >
+              ↓ Export CSV
+            </button>
+          )}
           <button onClick={onRefresh} disabled={refreshing}>
             {refreshing ? "Refreshing…" : "↻ Refresh"}
           </button>

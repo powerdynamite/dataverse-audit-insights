@@ -10,8 +10,9 @@ import {
 import { RecordLookup } from "./components/RecordLookup";
 import { ChangeHistory } from "./components/ChangeHistory";
 import { FieldDiff } from "./components/FieldDiff";
+import { BulkRestore } from "./components/BulkRestore";
 
-type View = "lookup" | "history" | "diff";
+type View = "lookup" | "history" | "diff" | "bulk";
 
 function readLaunchParams(): RecordContext {
   const p = new URLSearchParams(window.location.search);
@@ -32,6 +33,7 @@ export function App() {
   const [error, setError]             = useState<string | null>(null);
   const [restoreResult, setRestoreResult]   = useState<string | null>(null);
   const [recreateResult, setRecreateResult] = useState<RecreateResult | null>(null);
+  const [bulkEntries, setBulkEntries]       = useState<AuditEntry[]>([]);
 
   async function load(target: RecordContext) {
     setBusy(true); setError(null);
@@ -134,9 +136,18 @@ export function App() {
             entries={entries}
             recordIsDeleted={recordIsDeleted}
             onSelect={openDiff}
+            onBulkRestore={(selected) => { setBulkEntries(selected); setView("bulk"); }}
             onBack={() => setView("lookup")}
             onRefresh={() => void load(ctx)}
             refreshing={busy}
+          />
+        )}
+
+        {view === "bulk" && (
+          <BulkRestore
+            ctx={ctx}
+            entries={bulkEntries}
+            onBack={() => setView("history")}
           />
         )}
 

@@ -10,6 +10,7 @@ export function ChangeHistory({
   entries,
   recordIsDeleted,
   onSelect,
+  onBulkRestore,
   onBack,
   onRefresh,
   refreshing
@@ -18,12 +19,28 @@ export function ChangeHistory({
   entries: AuditEntry[];
   recordIsDeleted: boolean;
   onSelect: (entry: AuditEntry) => void;
+  onBulkRestore: (entries: AuditEntry[]) => void;
   onBack: () => void;
   onRefresh: () => void;
   refreshing: boolean;
 }) {
   const [filterOps,    setFilterOps]    = useState<Set<number>>(new Set());
   const [filterFields, setFilterFields] = useState<Set<string>>(new Set());
+  const [selectMode,   setSelectMode]   = useState(false);
+  const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set());
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }
 
   function toggleOp(op: number) {
     setFilterOps(prev => {
@@ -101,10 +118,34 @@ export function ChangeHistory({
               ↓ Export CSV
             </button>
           )}
-          <button onClick={onRefresh} disabled={refreshing}>
-            {refreshing ? "Refreshing…" : "↻ Refresh"}
-          </button>
-          <button onClick={onBack}>← New lookup</button>
+          {entries.filter((e) => e.operation === 2).length > 1 && !selectMode && (
+            <button onClick={() => setSelectMode(true)} title="Select multiple events to bulk restore">
+              ☑ Select
+            </button>
+          )}
+          {selectMode && (
+            <>
+              <button
+                className="primary"
+                disabled={selectedIds.size === 0}
+                onClick={() => {
+                  const selected = filtered.filter((e) => selectedIds.has(e.auditId));
+                  onBulkRestore(selected);
+                }}
+              >
+                Restore {selectedIds.size > 0 ? `(${selectedIds.size})` : ""}
+              </button>
+              <button className="ghost" onClick={exitSelectMode}>Cancel</button>
+            </>
+          )}
+          {!selectMode && (
+            <>
+              <button onClick={onRefresh} disabled={refreshing}>
+                {refreshing ? "Refreshing…" : "↻ Refresh"}
+              </button>
+              <button onClick={onBack}>← New lookup</button>
+            </>
+          )}
         </div>
       </div>
 
@@ -237,18 +278,42 @@ export function ChangeHistory({
       {/* ── Timeline ── */}
       {filtered.length > 0 && (
         <ul className="timeline">
-          {filtered.map((e) => (
-            <li key={e.auditId}>
-              <button className="timeline-item" onClick={() => onSelect(e)}>
-                <span className={`pill op-${e.operation}`}>{e.operationName}</span>
-                <span className="timeline-when">{formatDate(e.createdOn)}</span>
-                <span className="timeline-who">{e.userName ?? e.userId ?? "Unknown user"}</span>
-                <span className="timeline-count">
-                  {e.changes.length} field{e.changes.length === 1 ? "" : "s"}
-                </span>
-              </button>
-            </li>
-          ))}
+          {filtered.map((e) => {
+            const selectable = selectMode && e.operation === 2;
+            const checked    = selectedIds.has(e.auditId);
+            return (
+              <li key={e.auditId}>
+                {selectMode ? (
+                  <label
+                    className={`timeline-item timeline-item--selectable${checked ? " timeline-item--checked" : ""}${!selectable ? " timeline-item--disabled" : ""}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={!selectable}
+                      onChange={() => selectable && toggleSelect(e.auditId)}
+                      style={{ marginRight: 4 }}
+                    />
+                    <span className={`pill op-${e.operation}`}>{e.operationName}</span>
+                    <span className="timeline-when">{formatDate(e.createdOn)}</span>
+                    <span className="timeline-who">{e.userName ?? e.userId ?? "Unknown user"}</span>
+                    <span className="timeline-count">
+                      {e.changes.length} field{e.changes.length === 1 ? "" : "s"}
+                    </span>
+                  </label>
+                ) : (
+                  <button className="timeline-item" onClick={() => onSelect(e)}>
+                    <span className={`pill op-${e.operation}`}>{e.operationName}</span>
+                    <span className="timeline-when">{formatDate(e.createdOn)}</span>
+                    <span className="timeline-who">{e.userName ?? e.userId ?? "Unknown user"}</span>
+                    <span className="timeline-count">
+                      {e.changes.length} field{e.changes.length === 1 ? "" : "s"}
+                    </span>
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

@@ -580,6 +580,105 @@ table.diff tr:hover td { background: var(--primary-lighter); }
 }
 .diff-footer__note { font-size: 13px; color: var(--mid); }
 
+/* ── Bulk restore ──────────────────────────────────────────────────────────── */
+.bulk-summary-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--primary-lighter);
+  border: 1px solid var(--primary-light);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--primary-darker);
+  flex-wrap: wrap;
+}
+
+.bulk-entry {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  background: var(--bg);
+  transition: border-color .15s;
+}
+.bulk-entry--running { border-color: var(--primary); background: var(--primary-lighter); }
+.bulk-entry--done    { border-color: #9FDBA1; background: var(--green-light); }
+.bulk-entry--error   { border-color: #F4B8BB; background: var(--red-light); }
+
+.bulk-entry__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bulk-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--line-mid);
+}
+.bulk-status-dot--running { background: var(--primary); }
+.bulk-status-dot--done    { background: var(--green); }
+.bulk-status-dot--error   { background: var(--red); }
+
+.bulk-entry__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.bulk-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 3px 0;
+}
+.bulk-field-row input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+.bulk-field-name {
+  font-weight: 500;
+  color: var(--ink);
+  min-width: 140px;
+}
+
+/* Timeline selectable mode */
+.timeline-item--selectable {
+  display: grid;
+  grid-template-columns: 20px 90px 1fr 1fr auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--bg);
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+}
+.timeline-item--selectable:hover { background: var(--card); border-color: var(--line-mid); }
+.timeline-item--checked {
+  background: var(--primary-lighter) !important;
+  border-color: var(--primary) !important;
+}
+.timeline-item--disabled { opacity: .45; cursor: default; }
+
 /* ── Divider ───────────────────────────────────────────────────────────────── */
 .divider { height: 1px; background: var(--line); margin: 16px 0; }
 

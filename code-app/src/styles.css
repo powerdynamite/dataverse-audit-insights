@@ -565,8 +565,11 @@ table.diff tr:hover td { background: var(--primary-lighter); }
   text-transform: uppercase;
   letter-spacing: .3px;
 }
-.tag--lookup { background: var(--amber-light); color: #7D4E00; border: 1px solid #FFCE6E; }
-.tag--manual { background: var(--surface);     color: var(--mid); border: 1px solid var(--line); }
+.tag--lookup  { background: var(--amber-light); color: #7D4E00; border: 1px solid #FFCE6E; }
+.tag--manual  { background: var(--surface);     color: var(--mid); border: 1px solid var(--line); }
+.tag--deleted { background: #FEE2E2; color: #991B1B; border: 1px solid #FECACA; }
+.sugg--deleted { background: #FFF8F8; }
+.sugg--deleted:hover { background: #FFE4E6 !important; }
 
 .diff-footer {
   display: flex;

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { type RecordContext } from "../types";
-import { searchTables, searchRecordsByName, type TableMeta } from "../services/auditService";
+import { searchTables, searchRecordsByName, searchDeletedRecordsByName, type TableMeta } from "../services/auditService";
 
 export function RecordLookup({
   initial,
@@ -17,8 +17,8 @@ export function RecordLookup({
   const [tableLoading, setTableLoading]   = useState(false);
 
   const [recordQuery, setRecordQuery]       = useState("");
-  const [recordSuggs, setRecordSuggs]       = useState<{ id: string; name: string }[]>([]);
-  const [selectedRecord, setSelectedRecord] = useState<{ id: string; name: string } | null>(null);
+  const [recordSuggs, setRecordSuggs]       = useState<{ id: string; name: string; deleted?: boolean; deletedOn?: string }[]>([]);
+  const [selectedRecord, setSelectedRecord] = useState<{ id: string; name: string; deleted?: boolean } | null>(null);
   const [recordLoading, setRecordLoading]   = useState(false);
   const [guidFallback, setGuidFallback]     = useState("");
 
@@ -52,9 +52,15 @@ export function RecordLookup({
     if (!selectedTable || !recordQuery.trim()) return;
     setRecordLoading(true); setSearchErr(null); setRecordSuggs([]);
     try {
-      const res = await searchRecordsByName(selectedTable, recordQuery.trim());
-      setRecordSuggs(res);
-      if (res.length === 0)
+      const [active, deleted] = await Promise.all([
+        searchRecordsByName(selectedTable, recordQuery.trim()),
+        searchDeletedRecordsByName(selectedTable, recordQuery.trim())
+      ]);
+      const activeResults = active.map((r) => ({ ...r, deleted: false as const }));
+      const deletedResults = deleted.map((r) => ({ id: r.id, name: r.name, deleted: true as const, deletedOn: r.deletedOn }));
+      const combined = [...activeResults, ...deletedResults];
+      setRecordSuggs(combined);
+      if (combined.length === 0)
         setSearchErr(`No ${selectedTable.displayName} records found matching "${recordQuery}". Try the GUID field below.`);
     } catch (e) {
       setSearchErr(e instanceof Error ? e.message : String(e));
@@ -184,8 +190,11 @@ export function RecordLookup({
                   {recordSuggs.length > 0 && (
                     <ul className="suggestions">
                       {recordSuggs.map((r) => (
-                        <li key={r.id} onMouseDown={() => pickRecord(r)}>
-                          <span className="sugg-primary">{r.name}</span>
+                        <li key={r.id} onMouseDown={() => pickRecord(r)} className={r.deleted ? "sugg--deleted" : ""}>
+                          <span className="sugg-primary">
+                            {r.name}
+                            {r.deleted && <span className="tag tag--deleted">Deleted</span>}
+                          </span>
                           <span className="sugg-secondary mono">{r.id}</span>
                         </li>
                       ))}

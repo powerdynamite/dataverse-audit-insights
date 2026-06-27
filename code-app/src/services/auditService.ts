@@ -148,6 +148,68 @@ export async function searchRecordsByName(
   }));
 }
 
+export interface DeletedRecord {
+  id: string;
+  name: string;
+  deletedOn: string;
+}
+
+export async function searchDeletedRecordsByName(
+  meta: TableMeta,
+  query: string
+): Promise<DeletedRecord[]> {
+  // Query the audit table for Delete events on this table.
+  // objectid holds the record GUID; the primary name is stored inside changedata JSON.
+  const safe = query.replace(/'/g, "''");
+  const result = await MicrosoftDataverseService.ListRecordsWithOrganization(
+    ORG_URL,
+    "audits",
+    undefined,
+    "application/json",
+    NO_META,
+    NO_MIP,
+    "auditid,objectid,createdon,changedata",
+    `operation eq 3 and objecttypecode eq '${meta.logicalName}'`,
+    "createdon desc",
+    undefined,
+    undefined,
+    50
+  );
+  if (!result.success) return [];
+
+  const rows = listValue(result.data);
+  const seen = new Set<string>();
+  const out: DeletedRecord[] = [];
+
+  for (const row of rows) {
+    const id = String((row["objectid"] as Record<string, unknown>)?.["auditid"] ?? row["objectid"] ?? "");
+    if (!id || seen.has(id)) continue;
+
+    // Try to extract the primary name from changedata
+    let name = "";
+    try {
+      const cd = row["changedata"] as string | null;
+      if (cd) {
+        const parsed = JSON.parse(cd) as { changedAttributes?: { logicalName: string; oldValue: string | null }[] };
+        const hit = parsed.changedAttributes?.find(
+          (a) => a.logicalName === meta.primaryNameAttr
+        );
+        name = hit?.oldValue ?? "";
+      }
+    } catch { /* ignore */ }
+
+    // Apply query filter if we have a name
+    if (name && !name.toLowerCase().includes(safe.toLowerCase())) continue;
+    if (!name && safe) continue; // skip unnamed if user typed something
+
+    seen.add(id);
+    out.push({ id, name: name || "(unnamed)", deletedOn: String(row["createdon"] ?? "") });
+    if (out.length >= 10) break;
+  }
+
+  return out;
+}
+
 // ── changedata parsing ────────────────────────────────────────────────────────
 
 export function parseChangeData(raw: string | null | undefined): AttributeChange[] {

@@ -465,67 +465,110 @@ async function restoreViaRecycleBin(ctx: RecordContext): Promise<void> {
   }
 }
 
+interface ChildRelationship { childTable: string; lookupField: string; }
+
+// Cache so we only fetch relationships once per parent entity type
+const relationshipCache = new Map<string, ChildRelationship[]>();
+
+async function getRemoveLinkChildren(parentTable: string): Promise<ChildRelationship[]> {
+  const cached = relationshipCache.get(parentTable);
+  if (cached) return cached;
+
+  // Use the RelationshipDefinitions flat collection — supports standard OData filtering
+  const result = await MicrosoftDataverseService.ListRecordsWithOrganization(
+    ORG_URL,
+    "RelationshipDefinitions/Microsoft.Dynamics.CRM.OneToManyRelationshipMetadata",
+    undefined, "application/json", NO_META, NO_MIP,
+    "ReferencingEntity,ReferencingAttribute,CascadeConfiguration",
+    `ReferencedEntity eq '${parentTable}'`,
+    undefined, undefined, undefined, 100
+  );
+
+  const rels: ChildRelationship[] = [];
+  if (result.success) {
+    for (const r of listValue(result.data)) {
+      const cascadeDelete = (r["CascadeConfiguration"] as Record<string, unknown>)?.["Delete"] as string | undefined;
+      if (cascadeDelete === "RemoveLink" || cascadeDelete === "NoCascade") {
+        rels.push({
+          childTable:  String(r["ReferencingEntity"] ?? ""),
+          lookupField: String(r["ReferencingAttribute"] ?? "")
+        });
+      }
+    }
+  }
+  relationshipCache.set(parentTable, rels);
+  return rels;
+}
+
 /**
- * After the parent is restored, find any children that were orphaned via RemoveLink
- * (their lookup was set to null when parent was deleted) and re-link them back.
- * Detects these by looking for Update audit events on child records that happened
- * within a ±10s window of the parent delete, where a lookup field changed from
- * the parent record ID to null.
+ * After the parent is restored, find children orphaned via RemoveLink and re-link them.
+ *
+ * Strategy (changedata-free):
+ * RemoveLink system updates generate audit rows (op=2) with changedata=false.
+ * We detect them by: (1) getting the child relationship map from RelationshipDefinitions,
+ * (2) querying audit for op=2 events on each child entity type in a ±120s window,
+ * (3) PATCHing the lookup field back — but ONLY if the field is currently null
+ *     (prevents overwriting legitimate re-assignments made since the delete).
  */
 async function relinkOrphanedChildren(
   ctx: RecordContext,
   deletedOnIso: string
 ): Promise<number> {
-  const deleteMs = new Date(deletedOnIso).getTime();
-  const windowStart = new Date(deleteMs - 10_000).toISOString();
-  const windowEnd   = new Date(deleteMs + 10_000).toISOString();
-  const nowIso      = new Date().toISOString();
+  const nowIso     = new Date().toISOString();
+  const deleteMs   = new Date(deletedOnIso).getTime();
+  const winStart   = new Date(deleteMs - 30_000).toISOString();
+  const winEnd     = new Date(deleteMs + 120_000).toISOString(); // async ops can lag
 
-  const result = await MicrosoftDataverseService.ListRecordsWithOrganization(
-    ORG_URL, "audits", undefined, "application/json", NO_META, NO_MIP,
-    "auditid,_objectid_value,objecttypecode,changedata",
-    `operation eq 2 and createdon ge ${windowStart} and createdon le ${windowEnd} and createdon le ${nowIso}`,
-    undefined, undefined, undefined, 200
-  );
-  if (!result.success) return 0;
+  // Get all RemoveLink child relationships for this entity
+  const relationships = await getRemoveLinkChildren(ctx.tableLogicalName);
+  if (relationships.length === 0) return 0;
 
-  const rows = listValue(result.data);
+  const parentEntitySet = await getEntitySetName(ctx.tableLogicalName);
   let relinked = 0;
 
-  for (const row of rows) {
-    const cd = row["changedata"] as string | null;
-    if (!cd) continue;
+  for (const { childTable, lookupField } of relationships) {
+    if (!childTable || !lookupField) continue;
 
-    try {
-      const parsed = JSON.parse(cd) as {
-        changedAttributes?: { logicalName: string; oldValue: string | null; newValue: string | null }[];
-      };
+    // Find child record IDs from audit Update events in the time window
+    const auditResult = await MicrosoftDataverseService.ListRecordsWithOrganization(
+      ORG_URL, "audits", undefined, "application/json", NO_META, NO_MIP,
+      "auditid,_objectid_value",
+      `operation eq 2 and objecttypecode eq '${childTable}' and createdon ge ${winStart} and createdon le ${winEnd} and createdon le ${nowIso}`,
+      undefined, undefined, undefined, 100
+    );
+    if (!auditResult.success) continue;
 
-      // Find an attribute whose old value references our parent record ID and new value is null
-      const parentLookupChange = parsed.changedAttributes?.find((a) => {
-        const old = a.oldValue ?? "";
-        return old.includes(ctx.recordId) && (a.newValue === null || a.newValue === "");
-      });
-      if (!parentLookupChange) continue;
+    const seen = new Set<string>();
+    for (const auditRow of listValue(auditResult.data)) {
+      const childRecordId = String(auditRow["_objectid_value"] ?? "");
+      if (!childRecordId || seen.has(childRecordId)) continue;
+      seen.add(childRecordId);
 
-      const childRecordId = String(row["_objectid_value"] ?? "");
-      const childTable    = String(row["objecttypecode"] ?? "");
-      if (!childRecordId || !childTable) continue;
+      try {
+        const childEntitySet = await getEntitySetName(childTable);
 
-      const childEntitySet  = await getEntitySetName(childTable);
-      const parentEntitySet = await getEntitySetName(ctx.tableLogicalName);
+        // Verify the lookup is currently null before re-linking
+        // (avoids overwriting a legitimate re-assignment)
+        const current = await MicrosoftDataverseService.ListRecordsWithOrganization(
+          ORG_URL, childEntitySet, childRecordId,
+          "application/json", NO_META, NO_MIP,
+          `_${lookupField}_value`
+        );
+        if (!current.success) continue;
+        const currentLookup = current.data[`_${lookupField}_value`];
+        // Only re-link if the lookup is currently empty
+        if (currentLookup !== null && currentLookup !== undefined && currentLookup !== "") continue;
 
-      // Re-link: PATCH the lookup field back to the restored parent
-      const patchBody: Record<string, unknown> = {
-        [`${parentLookupChange.logicalName}@odata.bind`]: `/${parentEntitySet}(${ctx.recordId})`
-      };
-
-      const patchResult = await MicrosoftDataverseService.UpdateOnlyRecordWithOrganization(
-        "return=representation", "application/json", "*",
-        ORG_URL, childEntitySet, childRecordId, patchBody, NO_META
-      );
-      if (patchResult.success) relinked++;
-    } catch { /* non-fatal — continue to next row */ }
+        const patchBody: Record<string, unknown> = {
+          [`${lookupField}@odata.bind`]: `/${parentEntitySet}(${ctx.recordId})`
+        };
+        const patchResult = await MicrosoftDataverseService.UpdateOnlyRecordWithOrganization(
+          "return=representation", "application/json", "*",
+          ORG_URL, childEntitySet, childRecordId, patchBody, NO_META
+        );
+        if (patchResult.success) relinked++;
+      } catch { /* non-fatal */ }
+    }
   }
 
   return relinked;

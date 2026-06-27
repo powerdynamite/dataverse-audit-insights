@@ -158,9 +158,8 @@ export async function searchDeletedRecordsByName(
   meta: TableMeta,
   query: string
 ): Promise<DeletedRecord[]> {
-  // Query the audit table for Delete events on this table.
-  // objectid holds the record GUID; the primary name is stored inside changedata JSON.
-  const safe = query.replace(/'/g, "''");
+  // Step 1: get distinct record IDs from Delete audit events for this table
+  const nowIso = new Date().toISOString();
   const result = await MicrosoftDataverseService.ListRecordsWithOrganization(
     ORG_URL,
     "audits",
@@ -168,45 +167,69 @@ export async function searchDeletedRecordsByName(
     "application/json",
     NO_META,
     NO_MIP,
-    "auditid,objectid,createdon,changedata",
-    `operation eq 3 and objecttypecode eq '${meta.logicalName}'`,
+    "auditid,_objectid_value,createdon",
+    `operation eq 3 and objecttypecode eq '${meta.logicalName}' and createdon le ${nowIso}`,
     "createdon desc",
     undefined,
     undefined,
-    50
+    100
   );
   if (!result.success) return [];
 
   const rows = listValue(result.data);
-  const seen = new Set<string>();
-  const out: DeletedRecord[] = [];
-
+  const deletedMap = new Map<string, string>(); // recordId → deletedOn
   for (const row of rows) {
-    const id = String((row["objectid"] as Record<string, unknown>)?.["auditid"] ?? row["objectid"] ?? "");
-    if (!id || seen.has(id)) continue;
+    const id = String(row["_objectid_value"] ?? "");
+    if (id && !deletedMap.has(id)) deletedMap.set(id, String(row["createdon"] ?? ""));
+  }
+  if (deletedMap.size === 0) return [];
 
-    // Try to extract the primary name from changedata
-    let name = "";
-    try {
-      const cd = row["changedata"] as string | null;
-      if (cd) {
-        const parsed = JSON.parse(cd) as { changedAttributes?: { logicalName: string; oldValue: string | null }[] };
-        const hit = parsed.changedAttributes?.find(
-          (a) => a.logicalName === meta.primaryNameAttr
-        );
-        name = hit?.oldValue ?? "";
-      }
-    } catch { /* ignore */ }
+  // Step 2: for each deleted record ID, find its name from the last Update/Create audit event
+  // Query audit for non-Delete events on these records to extract the primary name from changedata
+  const recordIds = [...deletedMap.keys()].slice(0, 20);
+  const idFilter = recordIds.map((id) => `_objectid_value eq ${id}`).join(" or ");
 
-    // Apply query filter if we have a name
-    if (name && !name.toLowerCase().includes(safe.toLowerCase())) continue;
-    if (!name && safe) continue; // skip unnamed if user typed something
+  const nameResult = await MicrosoftDataverseService.ListRecordsWithOrganization(
+    ORG_URL,
+    "audits",
+    undefined,
+    "application/json",
+    NO_META,
+    NO_MIP,
+    "auditid,_objectid_value,changedata,operation",
+    `(${idFilter}) and (operation eq 1 or operation eq 2) and createdon le ${nowIso}`,
+    "createdon desc",
+    undefined,
+    undefined,
+    200
+  );
 
-    seen.add(id);
-    out.push({ id, name: name || "(unnamed)", deletedOn: String(row["createdon"] ?? "") });
-    if (out.length >= 10) break;
+  const nameMap = new Map<string, string>(); // recordId → name
+  if (nameResult.success) {
+    for (const row of listValue(nameResult.data)) {
+      const id = String(row["_objectid_value"] ?? "");
+      if (!id || nameMap.has(id)) continue;
+      try {
+        const cd = row["changedata"] as string | null;
+        if (cd) {
+          const parsed = JSON.parse(cd) as { changedAttributes?: { logicalName: string; oldValue?: string | null; newValue?: string | null }[] };
+          const hit = parsed.changedAttributes?.find((a) => a.logicalName === meta.primaryNameAttr);
+          const name = String(hit?.newValue ?? hit?.oldValue ?? "");
+          if (name) nameMap.set(id, name);
+        }
+      } catch { /* ignore */ }
+    }
   }
 
+  // Step 3: filter by query and build results
+  const safe = query.toLowerCase();
+  const out: DeletedRecord[] = [];
+  for (const [id, deletedOn] of deletedMap) {
+    const name = nameMap.get(id) ?? "";
+    if (safe && !name.toLowerCase().includes(safe)) continue;
+    out.push({ id, name: name || "(unnamed)", deletedOn });
+    if (out.length >= 10) break;
+  }
   return out;
 }
 
